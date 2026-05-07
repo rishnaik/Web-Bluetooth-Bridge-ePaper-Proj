@@ -1,55 +1,52 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>XIAO Weather Bridge</title>
-        <style>
-                body { font-family: sans-serif; text-align: center; padding: 50px; }
-                        button { padding: 20px; font-size: 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 10px; }
-                            </style>
-                            </head>
-                            <body>
-                                <h1>XIAO E-Paper Sync</h1>
-                                    <button onclick="syncWeather()">Sync Weather via BLE</button>
-                                        <p id="status">Status: Ready</p>
+<title>XIAO Weather Bridge</title>
+<style>
+body { font-family: sans-serif; text-align: center; padding: 50px; }
+button { padding: 20px; font-size: 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 10px; }
+</style>
+</head>
+<body>
+<h1>XIAO E-Paper Sync</h1>
+<button onclick="syncWeather()">Sync Weather via BLE</button>
+<p id="status">Status: Ready</p>
 
-                                            <script>
-                                                    async function syncWeather() {
-                                                                const status = document.getElementById('status');
-                                                                            const API_KEY = 'f440deda74c2ea5ea493929a547bf7cd'; 
-                                                                                        const CITY = 'London'; // Change to your city
+<script>
+async function syncWeather() {
+const status = document.getElementById('status');
+const API_KEY = 'f440deda74c2ea5ea493929a547bf7cd'; 
+const CITY = 'Anekal, IN'; // Change to your city
 
-                                                                                                    try {
-                                                                                                                    status.innerText = "Fetching weather...";
-                                                                                                                                    const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${CITY}&appid=${API_KEY}&units=metric`);
-                                                                                                                                                    const weather = await res.json();
+try {
+status.innerText = "Fetching weather...";
+const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${CITY}&appid=${API_KEY}&units=metric`);
+const weather = await res.json();
 
-                                                                                                                                                                    const temps = new Uint8Array([
-                                                                                                                                                                                        Math.round(weather.list[0].main.temp),
-                                                                                                                                                                                                            Math.round(weather.list[8].main.temp),
-                                                                                                                                                                                                                                Math.round(weather.list[16].main.temp),
-                                                                                                                                                                                                                                                    Math.round(weather.list[24].main.temp),
-                                                                                                                                                                                                                                                                        Math.round(weather.list[32].main.temp)
-                                                                                                                                                                                                                                                                                        ]);
+const temps = new Uint8Array([
+Math.round(weather.list[0].main.temp),
+Math.round(weather.list[8].main.temp),
+Math.round(weather.list[16].main.temp),
+Math.round(weather.list[24].main.temp),
+Math.round(weather.list[32].main.temp)
+]);
 
-                                                                                                                                                                                                                                                                                                        status.innerText = "Connecting to XIAO...";
-                                                                                                                                                                                                                                                                                                                        const device = await navigator.bluetooth.requestDevice({
-                                                                                                                                                                                                                                                                                                                                            filters: [{ name: 'XIAO-Weather' }],
-                                                                                                                                                                                                                                                                                                                                                                optionalServices: ['180d']
-                                                                                                                                                                                                                                                                                                                                                                                });
-
-                                                                                                                                                                                                                                                                                                                                                                                                const server = await device.gatt.connect();
-                                                                                                                                                                                                                                                                                                                                                                                                                const service = await server.getPrimaryService('180d');
-                                                                                                                                                                                                                                                                                                                                                                                                                                const char = await service.getCharacteristic('2a37');
-
-                                                                                                                                                                                                                                                                                                                                                                                                                                                status.innerText = "Sending data...";
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                await char.writeValue(temps);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                status.innerText = "Success! Display updating...";
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            } catch (error) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            status.innerText = "Error: " + error;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            console.error(error);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                }
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    </script>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    </body>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    </html>
+status.innerText = "Connecting to XIAO...";
+const device = await navigator.bluetooth.requestDevice({
+filters: [{ name: 'XIAO-Weather' }],
+optionalServices: ['180d']
+});
+const server = await device.gatt.connect();
+const service = await server.getPrimaryService('180d');
+const char = await service.getCharacteristic('2a37');
+status.innerText = "Sending data...";
+await char.writeValue(temps);
+status.innerText = "Success! Display updating...";
+} catch (error) {
+status.innerText = "Error: " + error;
+console.error(error);
+}
+}
+</script>
+</body>
+</html>
