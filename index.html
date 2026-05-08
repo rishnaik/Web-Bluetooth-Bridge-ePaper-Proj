@@ -3,60 +3,70 @@
 <head>
     <title>ePaper Clock Sync</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
-        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
-        #status { margin-top: 20px; color: #555; }
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; background: #f4f4f9; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 20px; font-weight: bold; color: #333; }
     </style>
 </head>
 <body>
     <h1>ePaper Clock Sync</h1>
-    <button id="connectBtn">Connect & Sync Time</button>
+    <button id="connectBtn">Connect & Sync</button>
     <p id="status">Status: Disconnected</p>
 
     <script>
         const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-        const UART_TX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+        const UART_TX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Web writes to this
+        const UART_RX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Web listens to this
 
         const connectBtn = document.getElementById('connectBtn');
         const statusText = document.getElementById('status');
 
         connectBtn.addEventListener('click', async () => {
             try {
+                connectBtn.disabled = true;
                 statusText.innerText = "Searching for ePaper-Clock...";
                 
-                // 1. Request device
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'ePaper-Clock' }],
                     optionalServices: [UART_SERVICE_UUID]
                 });
 
-                // 2. Connect to GATT Server
                 const server = await device.gatt.connect();
-                statusText.innerText = "Connected! Finding Service...";
-
-                // 3. Get UART Service
                 const service = await server.getPrimaryService(UART_SERVICE_UUID);
-                const characteristic = await service.getCharacteristic(UART_TX_CHARACTERISTIC_UUID);
+                const txChar = await service.getCharacteristic(UART_TX_UUID);
+                const rxChar = await service.getCharacteristic(UART_RX_UUID);
 
-                // 4. Format Time: T:YYYY,MM,DD,HH,mm,SS
+                // Start notifications to listen for the "OK" message
+                await rxChar.startNotifications();
+                statusText.innerText = "Connected. Waiting for confirmation...";
+
+                rxChar.addEventListener('characteristicvaluechanged', (event) => {
+                    const value = new TextDecoder().decode(event.target.value);
+                    console.log("Received from Clock:", value);
+
+                    if (value.includes("OK:Time set!")) {
+                        statusText.innerText = "Confirmation received! Disconnecting...";
+                        setTimeout(() => {
+                            device.gatt.disconnect();
+                            statusText.innerText = "Sync Successful. Device Disconnected.";
+                            connectBtn.disabled = false;
+                        }, 1000);
+                    }
+                });
+
+                // Format and Send Time: T:YYYY,MM,DD,HH,mm,SS
                 const now = new Date();
                 const timeStr = `T:${now.getFullYear()},${(now.getMonth() + 1).toString().padStart(2, '0')},${now.getDate().toString().padStart(2, '0')},${now.getHours().toString().padStart(2, '0')},${now.getMinutes().toString().padStart(2, '0')},${now.getSeconds().toString().padStart(2, '0')}`;
 
-                // 5. Send Data
                 const encoder = new TextEncoder();
-                await characteristic.writeValue(encoder.encode(timeStr));
-
-                statusText.innerText = `Synced: ${timeStr}`;
-                
-                // Disconnect after sync to save battery
-                setTimeout(() => {
-                    device.gatt.disconnect();
-                    statusText.innerText = "Sync Complete. Disconnected.";
-                }, 2000);
+                await txChar.writeValue(encoder.encode(timeStr));
+                statusText.innerText = "Time sent. Awaiting 'OK:Time set!'...";
 
             } catch (error) {
                 console.error(error);
                 statusText.innerText = "Error: " + error;
+                connectBtn.disabled = false;
             }
         });
     </script>
