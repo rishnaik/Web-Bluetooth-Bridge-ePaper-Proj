@@ -1,52 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>XIAO Weather Bridge</title>
-<style>
-body { font-family: sans-serif; text-align: center; padding: 50px; }
-button { padding: 20px; font-size: 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 10px; }
-</style>
+    <title>ePaper Clock Sync</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+        #status { margin-top: 20px; color: #555; }
+    </style>
 </head>
 <body>
-<h1>XIAO E-Paper Sync</h1>
-<button onclick="syncWeather()">Sync Weather via BLE</button>
-<p id="status">Status: Ready</p>
+    <h1>ePaper Clock Sync</h1>
+    <button id="connectBtn">Connect & Sync Time</button>
+    <p id="status">Status: Disconnected</p>
 
-<script>
-async function syncWeather() {
-const status = document.getElementById('status');
-const API_KEY = 'f440deda74c2ea5ea493929a547bf7cd'; 
-const CITY = 'Anekal,IN'; // Change to your city
+    <script>
+        const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const UART_TX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
 
-try {
-status.innerText = "Fetching weather...";
-const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${CITY}&APPID=${API_KEY}&units=metric`);
-const weather = await res.json();
+        const connectBtn = document.getElementById('connectBtn');
+        const statusText = document.getElementById('status');
 
-const temps = new Uint8Array([
-Math.round(weather.list[0].main.temp),
-Math.round(weather.list[8].main.temp),
-Math.round(weather.list[16].main.temp),
-Math.round(weather.list[24].main.temp),
-Math.round(weather.list[32].main.temp)
-]);
+        connectBtn.addEventListener('click', async () => {
+            try {
+                statusText.innerText = "Searching for ePaper-Clock...";
+                
+                // 1. Request device
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'ePaper-Clock' }],
+                    optionalServices: [UART_SERVICE_UUID]
+                });
 
-status.innerText = "Connecting to XIAO...";
-const device = await navigator.bluetooth.requestDevice({
-filters: [{ name: 'XIAO-Weather' }],
-optionalServices: ['180d']
-});
-const server = await device.gatt.connect();
-const service = await server.getPrimaryService('180d');
-const char = await service.getCharacteristic('2a37');
-status.innerText = "Sending data...";
-await char.writeValue(temps);
-status.innerText = "Success! Display updating...";
-} catch (error) {
-status.innerText = "Error: " + error;
-console.error(error);
-}
-}
-</script>
+                // 2. Connect to GATT Server
+                const server = await device.gatt.connect();
+                statusText.innerText = "Connected! Finding Service...";
+
+                // 3. Get UART Service
+                const service = await server.getPrimaryService(UART_SERVICE_UUID);
+                const characteristic = await service.getCharacteristic(UART_TX_CHARACTERISTIC_UUID);
+
+                // 4. Format Time: T:YYYY,MM,DD,HH,mm,SS
+                const now = new Date();
+                const timeStr = `T:${now.getFullYear()},${(now.getMonth() + 1).toString().padStart(2, '0')},${now.getDate().toString().padStart(2, '0')},${now.getHours().toString().padStart(2, '0')},${now.getMinutes().toString().padStart(2, '0')},${now.getSeconds().toString().padStart(2, '0')}`;
+
+                // 5. Send Data
+                const encoder = new TextEncoder();
+                await characteristic.writeValue(encoder.encode(timeStr));
+
+                statusText.innerText = `Synced: ${timeStr}`;
+                
+                // Disconnect after sync to save battery
+                setTimeout(() => {
+                    device.gatt.disconnect();
+                    statusText.innerText = "Sync Complete. Disconnected.";
+                }, 2000);
+
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = "Error: " + error;
+            }
+        });
+    </script>
 </body>
 </html>
